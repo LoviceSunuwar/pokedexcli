@@ -45,6 +45,11 @@ func init() {
 			description: "Displays the list of map",
 			callback:    fetchMap,
 		},
+		"mapb": {
+			name:        "mapb",
+			description: "Go back to the previous map",
+			callback:    fetchmapB,
+		},
 	}
 }
 
@@ -93,6 +98,53 @@ func fetchMap(cfg *config) error {
 	if err != nil {
 		log.Fatalf("Unmarshal failed %v", err)
 	}
+
+	cfg.next = resultLocationArea.Next
+	cfg.previous = resultLocationArea.Previous
+
+	locationResults := resultLocationArea.Results
+
+	for _, x := range locationResults {
+		fmt.Println(x.Name)
+	}
+
+	return nil
+}
+
+func fetchmapB(cfg *config) error {
+	var fullUrl string
+
+	if cfg.previous == "" {
+		fmt.Print("You are on the first page")
+		return nil
+	} else {
+		fullUrl = cfg.previous
+	}
+
+	res, err := http.Get(fullUrl)
+	if err != nil {
+		fmt.Println("Error fetching the location")
+		log.Fatal(err)
+	}
+
+	bytBody, err := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	if res.StatusCode > 299 {
+		log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resultLocationArea := locationAreaS{}
+
+	err = json.Unmarshal(bytBody, &resultLocationArea)
+	if err != nil {
+		log.Fatalf("Unmarshal failed %v", err)
+	}
+
+	cfg.next = resultLocationArea.Next
+	cfg.previous = resultLocationArea.Previous
 
 	locationResults := resultLocationArea.Results
 

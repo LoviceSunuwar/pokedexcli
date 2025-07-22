@@ -7,11 +7,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/lovicesunuwar/pokedexcli/internal/pokecache"
 )
 
 type config struct {
 	next     string
 	previous string
+	cache    pokecache.Cache
 }
 
 type cliCommand struct {
@@ -29,6 +33,7 @@ var configs config
 var commands map[string]cliCommand
 
 func init() {
+	configs.cache = pokecache.NewCache(5 * time.Minute)
 	commands = map[string]cliCommand{
 		"exit": {
 			name:        "exit",
@@ -61,7 +66,6 @@ func commandExit(*config) error {
 
 func commandHelp(*config) error {
 	fmt.Println("Welcome to the Pokedex!")
-	fmt.Println("Usage:\n")
 	for _, cmd := range commands {
 		fmt.Printf("%s: %s\n", cmd.name, cmd.description)
 	}
@@ -70,6 +74,7 @@ func commandHelp(*config) error {
 
 func fetchMap(cfg *config) error {
 	var fullUrl string
+	var bytBody []byte
 
 	if cfg.next == "" {
 		fullUrl = baseUrl + locationArea
@@ -77,24 +82,31 @@ func fetchMap(cfg *config) error {
 		fullUrl = cfg.next
 	}
 
-	res, err := http.Get(fullUrl)
-	if err != nil {
-		fmt.Println("Error fetching the location")
-		log.Fatal(err)
-	}
+	if cachedData, found := cfg.cache.Get(fullUrl); found {
+		fmt.Println("Using cached Data")
+		bytBody = cachedData
+	} else {
+		fmt.Println("Fetching from API")
+		res, err := http.Get(fullUrl)
+		if err != nil {
+			fmt.Println("Error fetching the location")
+			log.Fatal(err)
+		}
 
-	bytBody, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
-	}
-	if err != nil {
-		log.Fatal(err)
+		bytBody, err = io.ReadAll(res.Body)
+		defer res.Body.Close()
+		if res.StatusCode > 299 {
+			log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		cfg.cache.Add(fullUrl, bytBody)
 	}
 
 	resultLocationArea := locationAreaS{}
 
-	err = json.Unmarshal(bytBody, &resultLocationArea)
+	err := json.Unmarshal(bytBody, &resultLocationArea)
 	if err != nil {
 		log.Fatalf("Unmarshal failed %v", err)
 	}
@@ -113,6 +125,7 @@ func fetchMap(cfg *config) error {
 
 func fetchmapB(cfg *config) error {
 	var fullUrl string
+	var bytBody []byte
 
 	if cfg.previous == "" {
 		fmt.Print("You are on the first page")
@@ -121,24 +134,31 @@ func fetchmapB(cfg *config) error {
 		fullUrl = cfg.previous
 	}
 
-	res, err := http.Get(fullUrl)
-	if err != nil {
-		fmt.Println("Error fetching the location")
-		log.Fatal(err)
-	}
+	if cachedData, found := cfg.cache.Get(fullUrl); found {
+		fmt.Println("Using Cached Data on mapB")
+		bytBody = cachedData
+	} else {
+		res, err := http.Get(fullUrl)
+		if err != nil {
+			fmt.Println("Error fetching the location")
+			log.Fatal(err)
+		}
 
-	bytBody, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
-	}
-	if err != nil {
-		log.Fatal(err)
+		bytBody, err = io.ReadAll(res.Body)
+		defer res.Body.Close()
+		if res.StatusCode > 299 {
+			log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		cfg.cache.Add(fullUrl, bytBody)
 	}
 
 	resultLocationArea := locationAreaS{}
 
-	err = json.Unmarshal(bytBody, &resultLocationArea)
+	err := json.Unmarshal(bytBody, &resultLocationArea)
 	if err != nil {
 		log.Fatalf("Unmarshal failed %v", err)
 	}

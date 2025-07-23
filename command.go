@@ -16,12 +16,13 @@ type config struct {
 	next     string
 	previous string
 	cache    pokecache.Cache
+	areaName string
 }
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*config) error
+	callback    func(*config, []string) error
 }
 
 const baseUrl string = "https://pokeapi.co/api/v2/"
@@ -55,16 +56,21 @@ func init() {
 			description: "Go back to the previous map",
 			callback:    fetchmapB,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Explore the location via name",
+			callback:    explore,
+		},
 	}
 }
 
-func commandExit(*config) error {
+func commandExit(cfg *config, args []string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(*config) error {
+func commandHelp(cfg *config, args []string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	for _, cmd := range commands {
 		fmt.Printf("%s: %s\n", cmd.name, cmd.description)
@@ -72,7 +78,64 @@ func commandHelp(*config) error {
 	return nil
 }
 
-func fetchMap(cfg *config) error {
+func explore(cfg *config, args []string) error {
+
+	var fullUrl string
+	resultexpArea := ExploreArea{}
+	var bytBody []byte
+	if len(args) < 1 {
+		fmt.Println("The args string in explore is empty")
+		return fmt.Errorf("missing location area name")
+	} else {
+		fullUrl = baseUrl + locationArea + args[0] + "/"
+		if cachedData, found := cfg.cache.Get(fullUrl); found {
+			fmt.Println("Using Cached Data")
+			bytBody = cachedData
+		} else {
+			fmt.Println("Fetching the Data for explore")
+			res, err := http.Get(fullUrl)
+			if err != nil {
+				fmt.Println("Error fetching the location-area details")
+				log.Fatal(err)
+			}
+
+			defer res.Body.Close()
+
+			bytBody, err = io.ReadAll(res.Body)
+			if err != nil {
+				fmt.Println("Error reading the response body")
+				log.Fatal(err)
+			}
+			if res.StatusCode > 299 {
+				log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			cfg.cache.Add(fullUrl, bytBody)
+		}
+	}
+
+	err := json.Unmarshal(bytBody, &resultexpArea)
+	if err != nil {
+		log.Fatalf("Unmarshal failed %v", err)
+	}
+
+	expAreaResults := resultexpArea.PokemonEncounters
+	// fmt.Printf("DEBUG: bytBody length: %d\n", len(bytBody))                              // Add this line
+	// fmt.Printf("DEBUG: bytBody content (first 200 chars):\n%s\n", string(bytBody[:200])) // And this line (shows start of content)
+	fmt.Printf("Exploring %v \n", args[0])
+	fmt.Println("Found Pokemon:")
+
+	for _, x := range expAreaResults {
+
+		fmt.Printf("- %v \n", x.Pokemon.Name)
+	}
+
+	return nil
+}
+
+func fetchMap(cfg *config, args []string) error {
 	var fullUrl string
 	var bytBody []byte
 
@@ -123,7 +186,7 @@ func fetchMap(cfg *config) error {
 	return nil
 }
 
-func fetchmapB(cfg *config) error {
+func fetchmapB(cfg *config, args []string) error {
 	var fullUrl string
 	var bytBody []byte
 

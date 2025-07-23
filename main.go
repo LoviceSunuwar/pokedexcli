@@ -20,7 +20,16 @@ func main() {
 			cmdName := words[0]
 			cmd, exists := commands[cmdName]
 			if exists {
-				cmd.callback(&configs)
+				if cmdName == "explore" {
+					if len(words) < 2 {
+						fmt.Println("Usage: explore <area-name>")
+						continue
+					}
+					configs.areaName = words[1]
+					cmd.callback(&configs, words[1:])
+				} else {
+					cmd.callback(&configs, words[1:])
+				}
 			} else {
 				fmt.Println("Unknown command")
 			}

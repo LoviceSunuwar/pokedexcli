@@ -36,6 +36,13 @@ func main() {
 
 					cmd.callback(&configs, words[1:])
 
+				} else if cmdName == "inspect" {
+					if len(words) < 2 {
+						fmt.Println("Usage: inspect <pokemon>")
+						continue
+					}
+					configs.pokemonName = words[1]
+					cmd.callback(&configs, words[1:])
 				} else {
 					cmd.callback(&configs, words[1:])
 				}

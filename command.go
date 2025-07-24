@@ -72,6 +72,16 @@ func init() {
 			description: "Catch a Pokemon to add on the user's Pokedex",
 			callback:    catch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "Inspect your caught Pokemons",
+			callback:    inspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Pokedex The name says it all",
+			callback:    pokedex,
+		},
 	}
 }
 
@@ -86,6 +96,32 @@ func commandHelp(cfg *config, args []string) error {
 	for _, cmd := range commands {
 		fmt.Printf("%s: %s\n", cmd.name, cmd.description)
 	}
+	return nil
+}
+
+func pokedex(cfg *config, args []string) error {
+	fmt.Println("Your Pokedex:")
+	if len(cfg.pokedex) < 1 {
+		fmt.Println("Gotta Catch Them All, And YOU Have Caught None.")
+		return nil
+	}
+	for _, x := range cfg.pokedex {
+		fmt.Printf("- %s\n", x.Name)
+	}
+	return nil
+}
+
+func inspect(cfg *config, args []string) error {
+
+	pkman, ok := cfg.pokedex[cfg.pokemonName]
+	if !ok {
+		fmt.Printf("You have not caught %v\n", cfg.pokemonName)
+		return nil
+	}
+
+	fmt.Printf("Name: %s\n", pkman.Name)
+	fmt.Printf("Height: %d\n", pkman.Height)
+	fmt.Printf("Weight: %d\n", pkman.Weight)
 	return nil
 }
 
@@ -134,6 +170,7 @@ func catch(cfg *config, args []string) error {
 		fmt.Printf("%v escaped!\n", resultPokemon.Name)
 	} else {
 		fmt.Printf("%v was caught!\n", resultPokemon.Name)
+		fmt.Println("You may now inspect it with the inspect command.")
 		if cfg.pokedex == nil {
 			cfg.pokedex = make(map[string]PokemonPokeball)
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -13,10 +14,12 @@ import (
 )
 
 type config struct {
-	next     string
-	previous string
-	cache    pokecache.Cache
-	areaName string
+	next        string
+	previous    string
+	cache       pokecache.Cache
+	areaName    string
+	pokemonName string
+	pokedex     map[string]PokemonPokeball
 }
 
 type cliCommand struct {
@@ -29,11 +32,14 @@ const baseUrl string = "https://pokeapi.co/api/v2/"
 
 const locationArea string = "location-area/"
 
+const catchPokemon string = "pokemon/"
+
 var configs config
 
 var commands map[string]cliCommand
 
 func init() {
+
 	configs.cache = pokecache.NewCache(5 * time.Minute)
 	commands = map[string]cliCommand{
 		"exit": {
@@ -61,6 +67,11 @@ func init() {
 			description: "Explore the location via name",
 			callback:    explore,
 		},
+		"catch": {
+			name:        "catch",
+			description: "Catch a Pokemon to add on the user's Pokedex",
+			callback:    catch,
+		},
 	}
 }
 
@@ -76,6 +87,61 @@ func commandHelp(cfg *config, args []string) error {
 		fmt.Printf("%s: %s\n", cmd.name, cmd.description)
 	}
 	return nil
+}
+
+func catch(cfg *config, args []string) error {
+
+	var fullUrl string
+	resultPokemon := PokemonPokeball{}
+	var bytBody []byte
+
+	if len(args) < 1 {
+		fmt.Println("Insufficient Commands")
+		return fmt.Errorf("The pokemon name is missing...")
+	} else {
+		fullUrl = baseUrl + catchPokemon + args[0] + "/"
+		if cachedData, found := cfg.cache.Get(fullUrl); found {
+			bytBody = cachedData
+		} else {
+			res, err := http.Get(fullUrl)
+			if err != nil {
+				fmt.Println("Error Fecthing the response for Pokemon")
+				log.Fatal(err)
+			}
+			defer res.Body.Close()
+			bytBody, err = io.ReadAll(res.Body)
+			if err != nil {
+				fmt.Println("Error reading the body of the response of pokemon")
+				log.Fatal(err)
+			}
+			if res.StatusCode > 299 {
+				log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
+			}
+			cfg.cache.Add(fullUrl, bytBody)
+		}
+	}
+
+	err := json.Unmarshal(bytBody, &resultPokemon)
+	if err != nil {
+		fmt.Println("Error unmarshalling the data form the bytes")
+		log.Fatal(err)
+	}
+
+	maxVal := 2 * resultPokemon.BaseExperience
+	roll := rand.Intn(maxVal)
+	fmt.Printf("Throwing a Pokeball at %v...\n", resultPokemon.Name)
+	if roll < resultPokemon.BaseExperience {
+		fmt.Printf("%v escaped!\n", resultPokemon.Name)
+	} else {
+		fmt.Printf("%v was caught!\n", resultPokemon.Name)
+		if cfg.pokedex == nil {
+			cfg.pokedex = make(map[string]PokemonPokeball)
+		}
+		cfg.pokedex[resultPokemon.Name] = resultPokemon
+	}
+
+	return nil
+
 }
 
 func explore(cfg *config, args []string) error {
@@ -108,9 +174,6 @@ func explore(cfg *config, args []string) error {
 			}
 			if res.StatusCode > 299 {
 				log.Fatalf("Response failed with status code: %d and\nbody: %s ", res.StatusCode, bytBody)
-			}
-			if err != nil {
-				log.Fatal(err)
 			}
 			cfg.cache.Add(fullUrl, bytBody)
 		}

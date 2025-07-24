@@ -27,6 +27,15 @@ func main() {
 					}
 					configs.areaName = words[1]
 					cmd.callback(&configs, words[1:])
+				} else if cmdName == "catch" {
+					if len(words) < 2 {
+						fmt.Println("Usage: catch <pokemon>")
+						continue
+					}
+					configs.pokemonName = words[1]
+
+					cmd.callback(&configs, words[1:])
+
 				} else {
 					cmd.callback(&configs, words[1:])
 				}
